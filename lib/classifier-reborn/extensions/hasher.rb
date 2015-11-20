@@ -8,6 +8,7 @@ require 'set'
 module ClassifierReborn
   module Hasher
     STOPWORDS_PATH = [File.expand_path(File.dirname(__FILE__) + '/../../../data/stopwords')]
+    ALLOW_ACRONYMS_PATH = [File.expand_path(File.dirname(__FILE__) + '/../../../data/allow_acronyms')]
 
     module_function
 
@@ -21,17 +22,17 @@ module ClassifierReborn
 
     # Return a word hash without extra punctuation or short symbols, just stemmed words
     def clean_word_hash(str, language = 'en', enable_stemmer = true)
-      word_hash_for_words str.gsub(/[^\p{WORD}\s]/, '').downcase.split, language, enable_stemmer
+      word_hash_for_words str.gsub(/[^\p{WORD}\s]/, '').split, language, enable_stemmer
     end
 
     def word_hash_for_words(words, language = 'en', enable_stemmer = true)
       d = Hash.new(0)
       words.each do |word|
-        next unless word.length > 2 && !STOPWORDS[language].include?(word)
+        next unless word.length > 2 && !STOPWORDS[language].include?(word.downcase) || ALLOW_ACRONYMS[language].include?(word)
         if enable_stemmer
-          d[word.stem.intern] += 1
+          d[word.downcase.stem.intern] += 1
         else
-          d[word.intern] += 1
+          d[word.downcase.intern] += 1
         end
       end
       d
@@ -50,6 +51,20 @@ module ClassifierReborn
       hash[language] = []
 
       STOPWORDS_PATH.each do |path|
+        if File.exist?(File.join(path, language))
+          hash[language] = Set.new File.read(File.join(path, language.to_s)).split
+          break
+        end
+      end
+
+      hash[language]
+    end
+
+    # Create a lazily-loaded hash of allowed two-letter acronym data
+    ALLOW_ACRONYMS = Hash.new do |hash, language|
+      hash[language] = []
+
+      ALLOW_ACRONYMS_PATH.each do |path|
         if File.exist?(File.join(path, language))
           hash[language] = Set.new File.read(File.join(path, language.to_s)).split
           break
